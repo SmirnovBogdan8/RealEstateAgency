@@ -1,0 +1,48 @@
+server:
+  port: 8080
+
+
+
+spring:
+  sql:
+    init:
+      mode: always
+  jpa:
+    defer-datasource-initialization: true
+    show-sql: true
+    hibernate:
+      dialect: org.hibernate.dialect.PostgreSQLDialect
+  datasource:
+    platform: postgres
+    url: jdbc:postgresql://localhost:5432/real_estate_agency
+    username: postgres
+    password: postgres
+    driverClassName: org.postgresql.Driver
+
+
+real-estate-datasource:
+  platform: postgres
+  jdbc-url: jdbc:postgresql://localhost:5432/real_estate_agency?currentSchema=real_estate
+  url: jdbc:postgresql://localhost:5432/real_estate?currentSchema=real_estate
+  username: postgres
+  password: postgres
+  driverClassName: org.postgresql.Driver
+
+
+agency-datasource:
+  platform: postgres
+  jdbc-url: jdbc:postgresql://localhost:5432/real_estate_agency?currentSchema=agency
+  username: postgres
+  password: postgres
+  driverClassName: org.postgresql.Driver
+
+
+ftp:
+  host: localhost
+  port: 21
+  user: real_estate_agency
+  password: real_estate_agency
+
+contracts:
+  export:
+    cron: "*/10 * * * * *"

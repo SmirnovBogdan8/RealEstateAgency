@@ -1,0 +1,1332 @@
+server:
+  port: 8080
+
+
+
+spring:
+  security:
+    user:
+      name: test
+      password: test
+  sql:
+    init:
+      mode: always
+  jpa:
+    defer-datasource-initialization: true
+    show-sql: true
+    hibernate:
+      dialect: org.hibernate.dialect.PostgreSQLDialect
+#  datasource:
+#    platform: postgres
+#    url: jdbc:postgresql://localhost:5432/real_estate_agency
+#    username: postgres
+#    password: postgres
+#    driverClassName: org.postgresql.Driver
+
+
+real-estate-datasource:
+  platform: postgres
+  jdbc-url: jdbc:postgresql://localhost:5432/real_estate_agency?currentSchema=real_estate
+  url: jdbc:postgresql://localhost:5432/real_estate?currentSchema=real_estate
+  username: real_estate_user
+  password: real_estate_user
+  driverClassName: org.postgresql.Driver
+
+
+agency-datasource:
+  platform: postgres
+  jdbc-url: jdbc:postgresql://localhost:5432/real_estate_agency?currentSchema=agency
+  username: agency_user
+  password: agency_user
+  driverClassName: org.postgresql.Driver
+
+
+ftp:
+  host: localhost
+  port: 21
+  user: real_estate_agency
+  password: real_estate_agency
+
+contracts:
+  export:
+    cron: "*/10 * * * * *"
+create table if not exists real_estate.real_estate (
+    id SERIAL PRIMARY KEY,
+    area float8 constraint area_size_check check (area>0),
+    commission int4 constraint commission_size_check check (commission <= price),
+    number_of_rooms int4 constraint rooms_number_check check (number_of_rooms>0),
+    price float8,
+    type varchar(10),
+    address_id integer references real_estate.address (id)
+);
+
+
+create table if not exists real_estate.address (
+	id SERIAL primary key,
+    apartment_number varchar(5),
+    city varchar(32),
+    floor int4,
+    house_number varchar(5),
+    region varchar(32),
+    street varchar(32)
+);
+
+create table if not exists agency.contracts (
+    internal_id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    real_estate_id INTEGER,
+    creation_date TIMESTAMP,
+    approved BOOLEAN,
+    client_name varchar(255),
+    employee_name varchar(255)
+);package com.example.demo.ftp;
+
+import org.apache.commons.net.ftp.FTPClient;
+import org.apache.commons.net.ftp.FTPReply;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+
+@Component
+public class FtpClient {
+    @Value("${ftp.host}")
+    private String server;
+    @Value("${ftp.port}")
+    private int port;
+    @Value("${ftp.user}")
+    private String user;
+    @Value("${ftp.password}")
+    private String password;
+    private FTPClient ftpClient;
+
+    public void open() throws IOException {
+        ftpClient = new FTPClient();
+
+        ftpClient.connect(server, port);
+        int reply = ftpClient.getReplyCode();
+        if (!FTPReply.isPositiveCompletion(reply)) {
+            ftpClient.disconnect();
+            throw new IOException("Exception in connecting to FTP Server");
+        }
+
+        ftpClient.login(user, password);
+    }
+
+    public boolean isConnected() {
+        if(ftpClient == null) return false;
+        return ftpClient.isConnected();
+    }
+
+    public boolean upload(String text,String filename) throws IOException {
+        InputStream inputStream = new ByteArrayInputStream(text.getBytes());
+        ftpClient.enterLocalPassiveMode();
+        return ftpClient.storeFile("/" + filename, inputStream);
+    }
+
+    public void close() throws IOException {
+        ftpClient.disconnect();
+    }
+}
+package com.example.demo.controller;
+
+import com.example.demo.exception.ContractApproveException;
+import com.example.demo.model.Contract;
+import com.example.demo.model.ContractFindModel;
+import com.example.demo.model.RealEstateAgencyResponse;
+import com.example.demo.service.AgencyService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.UUID;
+
+@RestController
+@RequestMapping(path = "/agency-service", produces = MediaType.APPLICATION_JSON_VALUE)
+public class AgencyController {
+
+    @Autowired
+    AgencyService agencyService;
+
+    @PutMapping("/")
+    public ResponseEntity<RealEstateAgencyResponse> createContract(@RequestBody Contract contract) {
+        try {
+            Contract created = agencyService.createContract(contract);
+
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(RealEstateAgencyResponse.builder()
+                            .response(created).build());
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(RealEstateAgencyResponse.builder()
+                            .errors(List.of(e.getMessage()))
+                            .build()
+                    );
+        }
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<RealEstateAgencyResponse> findById(@PathVariable UUID id) {
+        try {
+            Contract contract = agencyService.findByInternalId(id);
+
+            return ResponseEntity.status(HttpStatus.OK)
+                    .body(RealEstateAgencyResponse.builder()
+                            .response(contract).build());
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(RealEstateAgencyResponse.builder()
+                            .errors(List.of(e.getMessage()))
+                            .build()
+                    );
+        }
+    }
+
+    @GetMapping("/find")
+    public ResponseEntity<RealEstateAgencyResponse> find(@RequestBody ContractFindModel contractFindModel) {
+        try {
+            List<Contract> contracts = agencyService.find(contractFindModel);
+
+            return ResponseEntity.status(HttpStatus.OK)
+                    .body(RealEstateAgencyResponse.builder()
+                            .response(contracts).build());
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(RealEstateAgencyResponse.builder()
+                            .errors(List.of(e.getMessage()))
+                            .build()
+                    );
+        }
+    }
+
+    @PostMapping("/approve/{id}")
+    public ResponseEntity<RealEstateAgencyResponse> approve(@PathVariable UUID id) {
+        try {
+            agencyService.approve(id);
+
+            return ResponseEntity.status(HttpStatus.OK)
+                    .body(RealEstateAgencyResponse.builder()
+                            .response("OK").build());
+        } catch (Exception e) {
+            if (e instanceof ContractApproveException) {
+                return ResponseEntity.badRequest()
+                        .body(RealEstateAgencyResponse.builder()
+                                .errors(List.of(e.getMessage()))
+                                .build()
+                        );
+            }
+            return ResponseEntity.internalServerError()
+                    .body(RealEstateAgencyResponse.builder()
+                            .errors(List.of(e.getMessage()))
+                            .build()
+                    );
+        }
+    }
+
+    @PostMapping("/disapprove/{id}")
+    public ResponseEntity<RealEstateAgencyResponse> disapprove(@PathVariable UUID id) {
+        try {
+            agencyService.disapprove(id);
+
+            return ResponseEntity.status(HttpStatus.OK)
+                    .body(RealEstateAgencyResponse.builder()
+                            .response("OK").build());
+        } catch (Exception e) {
+            if (e instanceof ContractApproveException) {
+                return ResponseEntity.badRequest()
+                        .body(RealEstateAgencyResponse.builder()
+                                .errors(List.of(e.getMessage()))
+                                .build()
+                        );
+            }
+            return ResponseEntity.internalServerError()
+                    .body(RealEstateAgencyResponse.builder()
+                            .errors(List.of(e.getMessage()))
+                            .build()
+                    );
+        }
+    }
+}
+package com.example.demo.controller;
+
+import com.example.demo.exception.RealEstateNotFoundException;
+import com.example.demo.model.Address;
+import com.example.demo.model.RealEstate;
+import com.example.demo.model.RealEstateAgencyResponse;
+import com.example.demo.service.RealEstateService;
+import lombok.extern.log4j.Log4j2;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Optional;
+
+@RestController
+@Log4j2
+@RequestMapping(path = "/real-estate-service")
+public class RealEstateController {
+
+    @Autowired
+    RealEstateService realEstateService;
+
+    @GetMapping(value = "/", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<RealEstateAgencyResponse> getAll() {
+        try {
+            List<RealEstate> all = realEstateService.getAll();
+            return ResponseEntity
+                    .status(HttpStatus.OK)
+                    .body(RealEstateAgencyResponse.builder()
+                            .response(all)
+                            .build());
+        } catch (RealEstateNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(RealEstateAgencyResponse
+                            .builder()
+                            .errors(List.of(e.getMessage()))
+                            .build());
+        }
+    }
+
+    @GetMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<RealEstateAgencyResponse> getById(@PathVariable(required = false) Optional<Long> id) {
+
+        if (id.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(RealEstateAgencyResponse
+                            .builder()
+                            .errors(List.of("parameter id is required"))
+                            .build());
+        }
+
+        try {
+            RealEstate realEstate = realEstateService.getById(id.get());
+            return ResponseEntity
+                    .status(HttpStatus.OK)
+                    .body(RealEstateAgencyResponse.builder()
+                            .response(realEstate)
+                            .build());
+        } catch (RealEstateNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(RealEstateAgencyResponse
+                            .builder()
+                            .errors(List.of(e.getMessage()))
+                            .build());
+        }
+    }
+
+
+    @GetMapping(value = "/address/find", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<RealEstateAgencyResponse> findByAddress(@RequestBody Address address) {
+
+        try {
+            List<RealEstate> realEstates = realEstateService.findByAddress(address);
+            return ResponseEntity
+                    .status(HttpStatus.OK)
+                    .body(RealEstateAgencyResponse.builder()
+                            .response(realEstates)
+                            .build());
+        } catch (RealEstateNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(RealEstateAgencyResponse
+                            .builder()
+                            .errors(List.of(e.getMessage()))
+                            .build());
+        }
+    }
+
+
+    @PostMapping(value = "/", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<RealEstateAgencyResponse> create(@RequestBody RealEstate realEstate) {
+        try {
+            realEstateService.create(realEstate);
+            return ResponseEntity
+                    .status(HttpStatus.CREATED)
+                    .body(RealEstateAgencyResponse.builder()
+                            .response("OK")
+                            .build());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(RealEstateAgencyResponse
+                            .builder()
+                            .errors(List.of(e.getMessage()))
+                            .build());
+        }
+    }
+
+
+    @DeleteMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<RealEstateAgencyResponse> delete(@PathVariable Long id) {
+        try {
+            realEstateService.delete(id);
+            return ResponseEntity
+                    .status(HttpStatus.OK)
+                    .body(RealEstateAgencyResponse.builder()
+                            .response("OK")
+                            .build());
+        } catch (Exception e) {
+            if (e instanceof RealEstateNotFoundException) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(RealEstateAgencyResponse
+                                .builder()
+                                .errors(List.of(e.getMessage()))
+                                .build());
+            }
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(RealEstateAgencyResponse
+                            .builder()
+                            .errors(List.of(e.getMessage()))
+                            .build());
+        }
+    }
+
+    @PutMapping(value = "/", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<RealEstateAgencyResponse> update(@RequestBody RealEstate realEstate) {
+        try {
+            realEstateService.update(realEstate);
+            return ResponseEntity
+                    .status(HttpStatus.OK)
+                    .body(RealEstateAgencyResponse.builder()
+                            .response("OK")
+                            .build());
+        } catch (Exception e) {
+            if (e instanceof RealEstateNotFoundException) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(RealEstateAgencyResponse
+                                .builder()
+                                .errors(List.of(e.getMessage()))
+                                .build());
+            }
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(RealEstateAgencyResponse
+                            .builder()
+                            .errors(List.of(e.getMessage()))
+                            .build());
+        }
+    }
+
+}
+package com.example.demo.model;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.Builder;
+import lombok.Data;
+
+import java.util.List;
+
+@Data
+@Builder
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class RealEstateAgencyResponse {
+    List<String> errors;
+    Object response;
+}
+package com.example.demo.model;
+
+import lombok.Builder;
+import lombok.Data;
+import lombok.ToString;
+
+@Data
+@Builder
+@ToString
+public class Address {
+    private String region;
+    private String city;
+    private String street;
+    private String houseNumber;
+    private String apartmentNumber;
+    private Integer floor;
+}
+package com.example.demo.model;
+
+public enum RealEstateType {
+    RENT, SALE
+}
+package com.example.demo.model;
+
+import lombok.Builder;
+import lombok.Data;
+
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+
+@Data
+@Builder
+public class RealEstate {
+    @Id
+    @GeneratedValue(strategy = GenerationType.SEQUENCE)
+    private Long id;
+
+    private Address address;
+    private Integer numberOfRooms;
+    private Double area;
+    private RealEstateType type;
+    private Double price;
+    private Integer commission;
+}
+package com.example.demo.model;
+
+import lombok.Builder;
+import lombok.Data;
+
+import java.sql.Timestamp;
+import java.util.UUID;
+
+@Data
+@Builder
+public class Contract {
+    private UUID internalId;
+    private Long realEstateId;
+    private Timestamp creationDate;
+    private Boolean approved;
+    private String clientName;
+    private String employeeName;
+
+    @Override
+    public String toString() {
+        return  internalId +
+                "," + realEstateId +
+                "," + approved +
+                "," + clientName +
+                "," + employeeName +
+                "," + creationDate;
+    }
+}
+
+
+package com.example.demo.model;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Builder;
+import lombok.Data;
+
+import java.sql.Timestamp;
+
+@Data
+@Builder
+public class ContractFindModel {
+    private Timestamp dateFrom;
+    private Timestamp dateTo;
+
+    @JsonProperty("filter")
+    private Contract contract;
+}
+package com.example.demo;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.jdbc.DataSourceBuilder;
+import org.springframework.context.annotation.Bean;
+import org.springframework.scheduling.annotation.EnableScheduling;
+
+import javax.sql.DataSource;
+
+@SpringBootApplication
+@EnableScheduling
+public class RealEstateAgencyApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(RealEstateAgencyApplication.class, args);
+    }
+
+
+
+    @ConfigurationProperties(prefix = "real-estate-datasource")
+    @Bean
+    public DataSource realEstateDatasource() {
+
+        return DataSourceBuilder
+                .create()
+                .build();
+    }
+
+
+    @ConfigurationProperties(prefix = "agency-datasource")
+    @Bean
+    public DataSource agencyDatasource() {
+
+        return DataSourceBuilder
+                .create()
+                .build();
+    }
+}
+
+
+package com.example.demo.exception;
+
+public class RealEstateException extends Exception {
+    public RealEstateException() {
+        super();
+    }
+
+    public RealEstateException(String message) {
+        super(message);
+    }
+
+    public RealEstateException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
+package com.example.demo.exception;
+
+public class ContractException extends Exception {
+    public ContractException() {
+        super();
+    }
+
+    public ContractException(String message) {
+        super(message);
+    }
+
+    public ContractException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
+package com.example.demo.exception;
+
+public class ContractApproveException extends Exception {
+    public ContractApproveException() {
+        super();
+    }
+
+    public ContractApproveException(String message) {
+        super(message);
+    }
+
+    public ContractApproveException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
+package com.example.demo.exception;
+
+public class RealEstateNotFoundException extends Exception {
+    public RealEstateNotFoundException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    public RealEstateNotFoundException(String message) {
+        super(message);
+    }
+}
+package com.example.demo.store;
+
+import com.example.demo.exception.ContractException;
+import com.example.demo.model.Contract;
+import lombok.extern.log4j.Log4j2;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+import javax.sql.DataSource;
+import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+@Log4j2
+@Component
+public class AgencyStore {
+
+    private final String QUERY_CREATE = "INSERT INTO contracts(internal_id,real_estate_id,creation_date,approved,client_name,employee_name) VALUES(?,?,?,?,?,?)";
+    private final String QUERY_FIND_BY_INTERNAL_ID = "SELECT * FROM contracts WHERE internal_id=?";
+    private final String QUERY_APPROVE = "UPDATE contracts SET approved=? WHERE internal_id=?";
+    private final String QUERY_FIND = "SELECT * FROM contracts where 1=1";
+    @Autowired
+    DataSource agencyDatasource;
+
+    public void create(Contract contract) throws ContractException {
+        try (Connection connection = agencyDatasource.getConnection()) {
+            PreparedStatement statement = connection.prepareStatement(QUERY_CREATE);
+            statement.setObject(1, contract.getInternalId());
+            statement.setLong(2, contract.getRealEstateId());
+            statement.setTimestamp(3, contract.getCreationDate());
+            statement.setObject(4, contract.getApproved());
+            statement.setString(5, contract.getClientName());
+            statement.setString(6, contract.getEmployeeName());
+            int result = statement.executeUpdate();
+            if (result == 0) throw new ContractException("error creating contract ");
+        } catch (SQLException e) {
+            log.error("create query: {}, error: {}", QUERY_CREATE, e.getMessage());
+            throw new ContractException("error creating contract: " + e.getMessage(), e.getCause());
+        }
+    }
+
+
+    public Contract findByInternalId(UUID id) throws ContractException {
+        try (Connection connection = agencyDatasource.getConnection()) {
+            PreparedStatement statement = connection.prepareStatement(QUERY_FIND_BY_INTERNAL_ID);
+            statement.setObject(1, id);
+
+            ResultSet resultSet = null;
+
+            if (statement.execute()) {
+                resultSet = statement.getResultSet();
+            } else {
+                throw new ContractException("contract with internal id " + id + " not found");
+            }
+            boolean next = resultSet.next();
+            if (!next) {
+                throw new ContractException("contract with internal id " + id + " not found");
+            }
+            return buildFromQueryResult(resultSet);
+        } catch (SQLException e) {
+            log.error("findByInternalId error: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    public void approve(UUID id) throws ContractException {
+        try (Connection connection = agencyDatasource.getConnection()) {
+            PreparedStatement statement = connection.prepareStatement(QUERY_APPROVE);
+            statement.setBoolean(1, true);
+            statement.setObject(2, id);
+            int result = statement.executeUpdate();
+
+            if (result == 0) throw new ContractException("can not approve contract with id " + id);
+        } catch (SQLException e) {
+            log.error("approve error: {}", e.getMessage());
+        }
+    }
+
+    public void disapprove(UUID id) throws ContractException {
+        try (Connection connection = agencyDatasource.getConnection()) {
+            PreparedStatement statement = connection.prepareStatement(QUERY_APPROVE);
+            statement.setBoolean(1, false);
+            statement.setObject(2, id);
+            int result = statement.executeUpdate();
+
+            if (result == 0) throw new ContractException("can not disapprove contract with id " + id);
+        } catch (SQLException e) {
+            log.error("disapprove error: {}", e.getMessage());
+        }
+    }
+
+    public List<Contract> find(Timestamp dateFrom, Timestamp dateTo, Long realEstateId, Boolean approved, String clientName, String employeeName) {
+        String query = QUERY_FIND;
+        List<Object> paramList = new ArrayList<>();
+        if (dateFrom != null) {
+            query += " and creation_date>=?";
+            paramList.add(dateFrom);
+        }
+        if (dateTo != null) {
+            query += " and creation_date<=?";
+            paramList.add(dateTo);
+        }
+        if (realEstateId != null) {
+            query += " and real_estate_id=?";
+            paramList.add(realEstateId);
+        }
+        if (approved != null) {
+            query += " and approved=?";
+            paramList.add(approved);
+        }
+        if (clientName != null) {
+            query += " and client_name=?";
+            paramList.add(clientName);
+        }
+        if (employeeName != null) {
+            query += " and employee_name=?";
+            paramList.add(employeeName);
+        }
+
+        try (Connection connection = agencyDatasource.getConnection()) {
+            PreparedStatement statement = connection.prepareStatement(query);
+            for (int i = 0; i < paramList.size(); i++) {
+                statement.setObject(i + 1, paramList.get(i));
+            }
+            ResultSet resultSet;
+            List<Contract> contractList = new ArrayList<>();
+
+            if (statement.execute()) {
+                resultSet = statement.getResultSet();
+            } else {
+                return contractList;
+            }
+
+            while (resultSet.next()) {
+                contractList.add(buildFromQueryResult(resultSet));
+            }
+
+            return contractList;
+        } catch (SQLException e) {
+            log.error("find error: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private Contract buildFromQueryResult(ResultSet resultSet) throws SQLException {
+        return Contract.builder()
+                .internalId(resultSet.getObject("internal_id", UUID.class))
+                .realEstateId(resultSet.getLong("real_estate_id"))
+                .clientName(resultSet.getString("client_name"))
+                .employeeName(resultSet.getString("employee_name"))
+                .approved(resultSet.getObject("approved", Boolean.class))
+                .creationDate(resultSet.getTimestamp("creation_date"))
+                .build();
+    }
+
+
+}
+package com.example.demo.store;
+
+import com.example.demo.exception.RealEstateException;
+import com.example.demo.exception.RealEstateNotFoundException;
+import com.example.demo.model.Address;
+import com.example.demo.model.RealEstate;
+import com.example.demo.model.RealEstateType;
+import lombok.extern.log4j.Log4j2;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+import javax.sql.DataSource;
+import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
+
+@Log4j2
+@Component
+public class RealEstateStore {
+
+    private final String QUERY_GET_ALL = "SELECT re.id, re.area, re.commission, re.number_of_rooms, re.price, re.\"type\",a.apartment_number, a.city, a.floor, a.house_number, a.region, a.street FROM real_estate.real_estate re inner join real_estate.address a on re.address_id = a.id";
+    private final String QUERY_GET_BY_ID = "SELECT re.id, re.area, re.commission, re.number_of_rooms, re.price, re.\"type\",a.apartment_number, a.city, a.floor, a.house_number, a.region, a.street FROM real_estate.real_estate re inner join real_estate.address a on re.address_id = a.id where re.id=?";
+    private final String QUERY_GET_BY_ADDRESS = "SELECT re.id, re.area, re.commission, re.number_of_rooms, re.price, re.\"type\",a.apartment_number, a.city, a.floor, a.house_number, a.region, a.street FROM real_estate.real_estate re inner join real_estate.address a on re.address_id = a.id where 1=1";
+    private final String QUERY_INSERT_REAL_ESTATE = "INSERT INTO real_estate (area, commission, number_of_rooms, price, \"type\",address_id) VALUES(?,?,?,?,?,?)";
+    private final String QUERY_INSERT_ADDRESS = "INSERT INTO address (apartment_number, city, floor, house_number, region, street) VALUES(?,?,?,?,?,?)";
+    private final String QUERY_DELETE_REAL_ESTATE = "DELETE FROM real_estate where id=?";
+    private final String QUERY_DELETE_ADDRESS = "DELETE FROM address where id=?";
+    private final String QUERY_SELECT_ADDRESS_ID = "SELECT address_id FROM real_estate where id=?";
+
+    private final String QUERY_UPDATE_REAL_ESTATE = "UPDATE real_estate SET area=?, commission=?, number_of_rooms=?, price=?, \"type\"=? WHERE id=?";
+    private final String QUERY_UPDATE_ADDRESS = "UPDATE address SET apartment_number=?, city=?, floor=?, house_number=?, region=?, street=? WHERE id=?";
+
+
+    @Autowired
+    DataSource realEstateDatasource;
+
+    public List<RealEstate> getAll() {
+        try (Connection connection = realEstateDatasource.getConnection()) {
+            Statement statement = connection.createStatement();
+            ResultSet resultSet = statement.executeQuery(QUERY_GET_ALL);
+
+            List<RealEstate> realEstateEntities = new ArrayList<>();
+            while (resultSet.next()) {
+                realEstateEntities.add(buildFromQueryResult(resultSet));
+            }
+            return realEstateEntities;
+        } catch (SQLException e) {
+            log.error("getAll query: {}, error: {}", QUERY_GET_ALL, e.getMessage());
+            return null;
+        }
+    }
+
+
+    public RealEstate getById(Long id) {
+        try (Connection connection = realEstateDatasource.getConnection()) {
+            PreparedStatement statement = connection.prepareStatement(QUERY_GET_BY_ID);
+            statement.setLong(1, id);
+
+            ResultSet resultSet = null;
+
+            if (statement.execute()) {
+                resultSet = statement.getResultSet();
+            } else {
+                log.error("getById error: not found by id {}", id);
+                return null;
+            }
+            boolean next = resultSet.next();
+            if (!next) {
+                log.error("getById error: not found by id {}", id);
+                return null;
+            }
+            return buildFromQueryResult(resultSet);
+        } catch (SQLException e) {
+            log.error("getById error: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    public List<RealEstate> getByAddress(Address address) {
+
+        String query = QUERY_GET_BY_ADDRESS;
+        List<Object> paramList = new ArrayList<>();
+        if (address.getRegion() != null) {
+            query += " and a.region=?";
+            paramList.add(address.getRegion());
+        }
+        if (address.getCity() != null) {
+            query += " and a.city=?";
+            paramList.add(address.getCity());
+        }
+        if (address.getStreet() != null) {
+            query += " and a.street=?";
+            paramList.add(address.getStreet());
+        }
+        if (address.getHouseNumber() != null) {
+            query += " and a.house_number=?";
+            paramList.add(address.getHouseNumber());
+        }
+        if (address.getApartmentNumber() != null) {
+            query += " and a.apartment_number=?";
+            paramList.add(address.getApartmentNumber());
+        }
+        if (address.getFloor() != null) {
+            query += " and a.floor=?";
+            paramList.add(address.getFloor());
+        }
+
+        try (Connection connection = realEstateDatasource.getConnection()) {
+            PreparedStatement statement = connection.prepareStatement(query);
+            for (int i = 0; i < paramList.size(); i++) {
+                statement.setObject(i + 1, paramList.get(i));
+            }
+            ResultSet resultSet;
+
+            if (statement.execute()) {
+                resultSet = statement.getResultSet();
+            } else {
+                log.error("getByAddress error: not found by address {}", address);
+                return null;
+            }
+
+            List<RealEstate> realEstateEntities = new ArrayList<>();
+            while (resultSet.next()) {
+                realEstateEntities.add(buildFromQueryResult(resultSet));
+            }
+
+            return realEstateEntities;
+        } catch (SQLException e) {
+            log.error("getByAddress error: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    public void create(RealEstate realEstateEntity) throws RealEstateException {
+        try (Connection connection = realEstateDatasource.getConnection()) {
+            connection.setAutoCommit(false);
+            
+            
+            PreparedStatement statementAddress = connection.prepareStatement(QUERY_INSERT_ADDRESS,Statement.RETURN_GENERATED_KEYS);
+            statementAddress.setString(1, realEstateEntity.getAddress().getApartmentNumber());
+            statementAddress.setString(2, realEstateEntity.getAddress().getCity());
+            statementAddress.setInt(3, realEstateEntity.getAddress().getFloor());
+            statementAddress.setString(4, realEstateEntity.getAddress().getHouseNumber());
+            statementAddress.setString(5, realEstateEntity.getAddress().getRegion());
+            statementAddress.setString(6, realEstateEntity.getAddress().getStreet());
+
+            statementAddress.executeUpdate();
+
+            ResultSet resultInsertAddress = statementAddress.getGeneratedKeys();
+            Integer insertedId = null;
+            if(resultInsertAddress.next()) {
+                insertedId = resultInsertAddress.getInt(1);
+            }
+
+            if(insertedId == null) {
+                connection.rollback();
+                throw new RealEstateException("error creating real estate: can not create address");
+            }
+
+            PreparedStatement statementRealEstate = connection.prepareStatement(QUERY_INSERT_REAL_ESTATE);
+            statementRealEstate.setDouble(1, realEstateEntity.getArea());
+            statementRealEstate.setDouble(2, realEstateEntity.getCommission());
+            statementRealEstate.setInt(3, realEstateEntity.getNumberOfRooms());
+            statementRealEstate.setDouble(4, realEstateEntity.getPrice());
+            statementRealEstate.setString(5, realEstateEntity.getType().name());
+            statementRealEstate.setInt(6, insertedId);
+
+            statementRealEstate.executeUpdate();
+            
+            connection.commit();
+
+        } catch (SQLException e) {
+            log.error("create query: {}, error: {}", QUERY_INSERT_REAL_ESTATE + ";" + QUERY_INSERT_ADDRESS, e.getMessage());
+            throw new RealEstateException("error creating real estate: " + e.getMessage(), e.getCause());
+        }
+    }
+
+
+    public void update(Long id, RealEstate realEstateEntity) throws RealEstateNotFoundException, RealEstateException {
+        try (Connection connection = realEstateDatasource.getConnection()) {
+            connection.setAutoCommit(false);
+
+            PreparedStatement selectStatement = connection.prepareStatement(QUERY_SELECT_ADDRESS_ID);
+            selectStatement.setLong(1, id);
+
+            selectStatement.execute();
+            ResultSet resultSet = selectStatement.getResultSet();
+            Integer addressId = null;
+            if (resultSet.next()) {
+                addressId = resultSet.getInt(1);
+            }
+
+            if(addressId == null) {
+                connection.rollback();
+                throw new RealEstateException("error updating real estate: address not found");
+            }
+
+            PreparedStatement realEstateUpdateStatement = connection.prepareStatement(QUERY_UPDATE_REAL_ESTATE);
+            realEstateUpdateStatement.setDouble(1, realEstateEntity.getArea());
+            realEstateUpdateStatement.setDouble(2, realEstateEntity.getCommission());
+            realEstateUpdateStatement.setInt(3, realEstateEntity.getNumberOfRooms());
+            realEstateUpdateStatement.setDouble(4, realEstateEntity.getPrice());
+            realEstateUpdateStatement.setString(5, realEstateEntity.getType().name());
+
+            realEstateUpdateStatement.setLong(6, id);
+
+            int result = realEstateUpdateStatement.executeUpdate();
+
+            if (result == 0) throw new RealEstateNotFoundException("real estate with id " + id + " not found");
+
+
+            PreparedStatement addressUpdateStatement = connection.prepareStatement(QUERY_UPDATE_ADDRESS);
+
+            addressUpdateStatement.setString(1, realEstateEntity.getAddress().getApartmentNumber());
+            addressUpdateStatement.setString(2, realEstateEntity.getAddress().getCity());
+            addressUpdateStatement.setInt(3, realEstateEntity.getAddress().getFloor());
+            addressUpdateStatement.setString(4, realEstateEntity.getAddress().getHouseNumber());
+            addressUpdateStatement.setString(5, realEstateEntity.getAddress().getRegion());
+            addressUpdateStatement.setString(6, realEstateEntity.getAddress().getStreet());
+            addressUpdateStatement.setLong(7, addressId);
+
+            addressUpdateStatement.executeUpdate();
+
+            connection.commit();
+
+        } catch (SQLException e) {
+            log.error("update query: {}, error: {}", QUERY_UPDATE_REAL_ESTATE, e.getMessage());
+            throw new RealEstateException("error updating real estate: " + e.getMessage(), e.getCause());
+        }
+    }
+
+
+    public void delete(Long id) throws RealEstateException, RealEstateNotFoundException {
+        try (Connection connection = realEstateDatasource.getConnection()) {
+            connection.setAutoCommit(false);
+            PreparedStatement selectStatement = connection.prepareStatement(QUERY_SELECT_ADDRESS_ID);
+            selectStatement.setLong(1, id);
+
+            selectStatement.execute();
+            ResultSet resultSet = selectStatement.getResultSet();
+            Integer addressId = null;
+            if (resultSet.next()) {
+                addressId = resultSet.getInt(1);
+            }
+
+
+            PreparedStatement deleteRealEstateStatement = connection.prepareStatement(QUERY_DELETE_REAL_ESTATE);
+            deleteRealEstateStatement.setLong(1, id);
+            int result = deleteRealEstateStatement.executeUpdate();
+
+            if (result == 0)
+                throw new RealEstateNotFoundException("error delete: real estate with id " + id + " not found");
+
+            if(addressId != null) {
+                PreparedStatement deleteAddressStatement = connection.prepareStatement(QUERY_DELETE_ADDRESS);
+                deleteAddressStatement.setLong(1, addressId);
+                int resultAddress = deleteAddressStatement.executeUpdate();
+
+                if (resultAddress == 0)
+                    throw new RealEstateNotFoundException("error delete: address with id " + id + " not found");
+            }
+
+            connection.commit();
+        } catch (SQLException e) {
+            log.error("delete query: {}, error: {}", QUERY_DELETE_REAL_ESTATE, e.getMessage());
+            throw new RealEstateException("error delete real estate: " + e.getMessage(), e.getCause());
+        }
+    }
+
+
+    private RealEstate buildFromQueryResult(ResultSet resultSet) throws SQLException {
+        return RealEstate.builder()
+                .id((resultSet.getLong("id")))
+                .area(resultSet.getDouble("area"))
+                .commission(resultSet.getInt("commission"))
+                .numberOfRooms(resultSet.getInt("number_of_rooms"))
+                .price(resultSet.getDouble("price"))
+                .type(RealEstateType.valueOf(resultSet.getString("type")))
+                .address(
+                        Address.builder()
+                                .apartmentNumber(resultSet.getString("apartment_number"))
+                                .city(resultSet.getString("city"))
+                                .floor(resultSet.getInt("floor"))
+                                .houseNumber(resultSet.getString("house_number"))
+                                .region(resultSet.getString("region"))
+                                .street(resultSet.getString("street"))
+                                .build()
+                ).build();
+    }
+}
+package com.example.demo.service;
+
+import com.example.demo.exception.RealEstateException;
+import com.example.demo.exception.RealEstateNotFoundException;
+import com.example.demo.model.Address;
+import com.example.demo.model.RealEstate;
+import com.example.demo.store.RealEstateStore;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+
+@Service
+public class RealEstateServiceImpl implements RealEstateService {
+
+    @Autowired
+    RealEstateStore realEstateStore;
+
+    @Override
+    public void create(RealEstate realEstateEntity) throws RealEstateException {
+        realEstateStore.create(realEstateEntity);
+    }
+
+    @Override
+    public void update(RealEstate realEstateEntity) throws RealEstateException, RealEstateNotFoundException {
+        Long id = realEstateEntity.getId();
+        if (id == null) throw new RealEstateException("real estate id is required");
+        realEstateStore.update(id, realEstateEntity);
+    }
+
+    @Override
+    public void delete(Long id) throws RealEstateException, RealEstateNotFoundException {
+        realEstateStore.delete(id);
+    }
+
+    @Override
+    public List<RealEstate> getAll() throws RealEstateNotFoundException {
+        List<RealEstate> all = realEstateStore.getAll();
+        if (all.isEmpty()) {
+            throw new RealEstateNotFoundException("no real estate was found");
+        }
+
+        return all;
+    }
+
+    @Override
+    public RealEstate getById(Long id) throws RealEstateNotFoundException {
+        RealEstate realEstate = realEstateStore.getById(id);
+        if (realEstate == null) {
+            throw new RealEstateNotFoundException("real estate with id " + id + " not found");
+        }
+        return realEstate;
+    }
+
+    @Override
+    public List<RealEstate> findByAddress(Address address) throws RealEstateNotFoundException {
+        List<RealEstate> realEstates = realEstateStore.getByAddress(address);
+        if (realEstates.isEmpty()) {
+            throw new RealEstateNotFoundException("real estates with address " + address + " not found");
+        }
+        return realEstates;
+    }
+}
+package com.example.demo.service;
+
+import com.example.demo.exception.ContractApproveException;
+import com.example.demo.exception.ContractException;
+import com.example.demo.model.Contract;
+import com.example.demo.model.ContractFindModel;
+
+import java.util.List;
+import java.util.UUID;
+
+public interface AgencyService {
+    Contract createContract(Contract contract) throws ContractException;
+
+    Contract findByInternalId(UUID id) throws ContractException;
+
+    void approve(UUID id) throws ContractException, ContractApproveException;
+
+    void disapprove(UUID id) throws ContractException, ContractApproveException;
+
+    List<Contract> find(ContractFindModel contractFindModel);
+}
+package com.example.demo.service;
+
+
+import com.example.demo.exception.RealEstateException;
+import com.example.demo.exception.RealEstateNotFoundException;
+import com.example.demo.model.Address;
+import com.example.demo.model.RealEstate;
+
+import java.util.List;
+
+public interface RealEstateService {
+    void create(RealEstate realEstateEntity) throws RealEstateException;
+
+    void update(RealEstate realEstateEntity) throws RealEstateException, RealEstateNotFoundException;
+
+    void delete(Long id) throws RealEstateException, RealEstateNotFoundException;
+
+    List<RealEstate> getAll() throws RealEstateNotFoundException;
+
+    RealEstate getById(Long id) throws RealEstateNotFoundException;
+
+    List<RealEstate> findByAddress(Address address) throws RealEstateNotFoundException;
+
+}
+package com.example.demo.service;
+
+import com.example.demo.exception.ContractApproveException;
+import com.example.demo.exception.ContractException;
+import com.example.demo.exception.RealEstateNotFoundException;
+import com.example.demo.ftp.FtpClient;
+import com.example.demo.model.Contract;
+import com.example.demo.model.ContractFindModel;
+import com.example.demo.model.RealEstate;
+import com.example.demo.store.AgencyStore;
+import lombok.extern.log4j.Log4j2;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+
+@Service
+@Log4j2
+public class AgencyServiceImpl implements AgencyService {
+    @Autowired
+    AgencyStore agencyStore;
+    @Autowired
+    FtpClient ftpClient;
+    @Autowired
+    RealEstateService realEstateService;
+
+    @Override
+    public Contract createContract(Contract contract) throws ContractException {
+        Long realEstateId = contract.getRealEstateId();
+        if (realEstateId == null) throw new ContractException("real estate id is required");
+
+        RealEstate realEstate;
+        try {
+            realEstate = realEstateService.getById(realEstateId);
+        } catch (RealEstateNotFoundException e) {
+            throw new ContractException("create contract error: real estate with id " + realEstateId + " not found");
+        }
+
+        Contract creation = Contract.builder()
+                .creationDate(Timestamp.from(Instant.now()))
+                .approved(null)
+                .internalId(UUID.randomUUID())
+                .realEstateId(realEstateId)
+                .clientName(contract.getClientName())
+                .employeeName(contract.getEmployeeName())
+                .build();
+
+        agencyStore.create(creation);
+
+        return creation;
+    }
+
+    @Override
+    public Contract findByInternalId(UUID id) throws ContractException {
+        return agencyStore.findByInternalId(id);
+    }
+
+    @Override
+    public void approve(UUID id) throws ContractException, ContractApproveException {
+        Contract contract = findByInternalId(id);
+        if (contract.getApproved() == null) {
+            agencyStore.approve(id);
+            return;
+        }
+        if (contract.getApproved()) {
+            throw new ContractApproveException("Contract with id " + id + " is already approved");
+        } else {
+            throw new ContractApproveException("can not approve contract with id " + id + " .Contract was disapproved");
+        }
+    }
+
+    @Override
+    public void disapprove(UUID id) throws ContractException, ContractApproveException {
+        Contract contract = findByInternalId(id);
+        if (contract.getApproved() == null) {
+            agencyStore.disapprove(id);
+            return;
+        }
+        if (!contract.getApproved()) {
+            throw new ContractApproveException("Contract with id " + id + " is already disapproved");
+        } else {
+            throw new ContractApproveException("can not approve contract with id " + id + " .Contract was approved");
+        }
+    }
+
+    @Override
+    public List<Contract> find(ContractFindModel contractFindModel) {
+        if (contractFindModel.getContract() == null) {
+            return agencyStore.find(
+                    contractFindModel.getDateFrom(),
+                    contractFindModel.getDateTo(),
+                    null,
+                    null,
+                    null,
+                    null
+            );
+        }
+        Long realEstateId = contractFindModel.getContract().getRealEstateId();
+        Boolean approved = contractFindModel.getContract().getApproved();
+        String clientName = contractFindModel.getContract().getClientName();
+        String employeeName = contractFindModel.getContract().getEmployeeName();
+
+        return agencyStore.find(
+                contractFindModel.getDateFrom(),
+                contractFindModel.getDateTo(),
+                realEstateId,
+                approved,
+                clientName,
+                employeeName
+        );
+    }
+
+    @Scheduled(cron = ("${contracts.export.cron}"))
+    public void exportContracts() throws IOException {
+        ContractFindModel contractFindModel = ContractFindModel.builder()
+                .dateFrom(Timestamp.from(Instant.now().minusSeconds(1000000)))
+                .dateTo(Timestamp.from(Instant.now()))
+                .contract(Contract.builder()
+                        .approved(true).build())
+                .build();
+        List<Contract> found = find(contractFindModel);
+
+        if(found == null || found.isEmpty()) {
+            log.info("No contracts to export");
+            return;
+        }
+
+
+        StringBuilder str = new StringBuilder();
+        str.append("internalId,realEstateId,approved,clientName,employeeName,creationDate\n");
+        for (Contract contract : found) {
+            str.append(contract.toString()).append("\n");
+        }
+
+
+        if (!ftpClient.isConnected()) {
+            ftpClient.open();
+        }
+        boolean success = false;
+        String filename = "contracts_" + Instant.now().toString() + ".csv";
+        if (ftpClient.isConnected()) {
+            success = ftpClient.upload(str.toString(),filename );
+        }
+        if (!success) {
+            log.error("can not write to ftp server");
+        } else {
+            log.info("successfully uploaded file {}",filename);
+        }
+
+        ftpClient.close();
+    }
+}
