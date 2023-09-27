@@ -1,0 +1,15 @@
+{
+    "address": {
+        "region": "Московский",
+        "city": "Москва",
+        "street": "Пушкино",
+        "houseNumber": "34",
+        "apartmentNumber": "228",
+        "floor": 14
+    },
+    "numberOfRooms": 2,
+    "area": 37.70,
+    "type": "RENT",
+    "price": 80000,
+    "commission": 25000
+}
