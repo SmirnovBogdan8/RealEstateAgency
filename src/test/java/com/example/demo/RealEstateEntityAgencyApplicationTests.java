@@ -3,15 +3,15 @@ package com.example.demo;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
-import org.junit.jupiter.api.*;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.testng.annotations.*;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
 import static io.restassured.RestAssured.given;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.testng.Assert.assertEquals;
 
 @SpringBootTest
 class RealEstateEntityAgencyApplicationTests {
@@ -22,8 +22,8 @@ class RealEstateEntityAgencyApplicationTests {
 	private String UUID;
 
 
-	@BeforeAll
-	static void TimeOutTest(){
+	@BeforeClass
+	public static void TimeOutTest(){
 		try {
 			Thread.sleep(5000);
 		} catch (InterruptedException e) {
@@ -35,7 +35,6 @@ class RealEstateEntityAgencyApplicationTests {
 	real-estate-service
 	*/
 
-	@Order(1)
 	@Test
 	void testPostCreate() throws IOException {
 		RestAssured.baseURI = port + "/" + epr;
@@ -50,8 +49,7 @@ class RealEstateEntityAgencyApplicationTests {
 		assertEquals(201, response.getStatusCode());
 	}
 
-	@Order(2)
-	@Test
+	@Test(dependsOnMethods = "testPostCreate")
 	void testPutUpdate()throws IOException {
 		RestAssured.baseURI = port + "/" + epr;
 
@@ -65,8 +63,7 @@ class RealEstateEntityAgencyApplicationTests {
 		assertEquals(200, response.getStatusCode());
 	}
 
-	@Order(3)
-	@Test
+	@Test(dependsOnMethods = "testPutUpdate")
 	void testGetAll(){
 
 		RestAssured.baseURI = port + "/" + epr;
@@ -76,8 +73,7 @@ class RealEstateEntityAgencyApplicationTests {
 		assertEquals(200, response.getStatusCode());
 	}
 
-	@Order(4)
-	@Test
+	@Test(dependsOnMethods = "testGetById")
 	void testGetById(){
 		RestAssured.baseURI = port + "/" + epr;
 
@@ -86,8 +82,7 @@ class RealEstateEntityAgencyApplicationTests {
 		assertEquals(200, response.getStatusCode());
 	}
 
-	@Order(5)
-	@Test
+	@Test(dependsOnMethods = "testGetFindByAddress")
 	void testGetFindByAddress(){
 		RestAssured.baseURI = port + "/" + epr;
 
@@ -99,7 +94,7 @@ class RealEstateEntityAgencyApplicationTests {
 		assertEquals(200, response.getStatusCode());
 	}
 
-	@Test
+	@Test(dependsOnMethods = "testGetFindByAddress")
 	void testDeleteDelete(){
 		RestAssured.baseURI = port + "/" + epr;
 
@@ -113,7 +108,7 @@ class RealEstateEntityAgencyApplicationTests {
 	/*
 	agency-service
 	*/
-	@Test
+	@Test(dependsOnMethods = "testDeleteDelete")
 	void testPutCreateContract() throws IOException {
 		RestAssured.baseURI = port + "/" + epa;
 
@@ -129,22 +124,22 @@ class RealEstateEntityAgencyApplicationTests {
 
 	}
 
-	@Test
+	@Test(dependsOnMethods = "testPutCreateContract")
 	void testGetFindByInternalId(){
 
 	}
 
-	@Test
+	@Test(dependsOnMethods = "testGetFindByInternalId")
 	void testGetFind(){
 
 	}
 
-	@Test
+	@Test(dependsOnMethods = "testGetFind")
 	void testPostApprove(){
 
 	}
 
-	@Test
+	@Test(dependsOnMethods = "testPostApprove")
 	void testPostDisapprove(){
 
 	}
