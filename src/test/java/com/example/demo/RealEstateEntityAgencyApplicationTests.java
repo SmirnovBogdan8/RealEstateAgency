@@ -3,8 +3,7 @@ package com.example.demo;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.io.IOException;
@@ -20,9 +19,11 @@ class RealEstateEntityAgencyApplicationTests {
 	private final String epr = "real-estate-service";
 	private final String epa = "agency-service";
 
+	private String UUID;
 
-	@BeforeEach
-	void TimeOutTest(){
+
+	@BeforeAll
+	static void TimeOutTest(){
 		try {
 			Thread.sleep(5000);
 		} catch (InterruptedException e) {
@@ -34,6 +35,37 @@ class RealEstateEntityAgencyApplicationTests {
 	real-estate-service
 	*/
 
+	@Order(1)
+	@Test
+	void testPostCreate() throws IOException {
+		RestAssured.baseURI = port + "/" + epr;
+
+		String requestBody = new String(Files.readAllBytes(Paths.get("src/test/resources/RealEstateRequestBody.txt")));
+
+		Response response = given()
+				.contentType(ContentType.JSON)
+				.body(requestBody)
+				.when().post("/");
+
+		assertEquals(201, response.getStatusCode());
+	}
+
+	@Order(2)
+	@Test
+	void testPutUpdate()throws IOException {
+		RestAssured.baseURI = port + "/" + epr;
+
+		String requestBody = new String(Files.readAllBytes(Paths.get("src/test/resources/RealEstateRequestBody.txt")));
+
+		Response response = given()
+				.contentType(ContentType.JSON)
+				.body(requestBody)
+				.when().put("/");
+
+		assertEquals(200, response.getStatusCode());
+	}
+
+	@Order(3)
 	@Test
 	void testGetAll(){
 
@@ -44,15 +76,17 @@ class RealEstateEntityAgencyApplicationTests {
 		assertEquals(200, response.getStatusCode());
 	}
 
+	@Order(4)
 	@Test
 	void testGetById(){
 		RestAssured.baseURI = port + "/" + epr;
 
-		Response response = RestAssured.get("/3");
+		Response response = RestAssured.get("/1");
 
 		assertEquals(200, response.getStatusCode());
 	}
 
+	@Order(5)
 	@Test
 	void testGetFindByAddress(){
 		RestAssured.baseURI = port + "/" + epr;
@@ -66,42 +100,12 @@ class RealEstateEntityAgencyApplicationTests {
 	}
 
 	@Test
-	void testPostCreate() throws IOException {
-		RestAssured.baseURI = port + "/" + epr;
-
-		String requestBody = new String(Files.readAllBytes(Paths.get("src/main/resources/RequestBody.txt")));
-
-		Response response = given()
-				.contentType(ContentType.JSON)
-				.body(requestBody)
-				.when().post("/");
-
-		assertEquals(201, response.getStatusCode());
-	}
-
-	@Test
-	void testPutUpdate()throws IOException {
-		RestAssured.baseURI = port + "/" + epr;
-
-		String requestBody = new String(Files.readAllBytes(Paths.get("src/main/resources/RequestBody.txt")));
-
-		Response response = given()
-				.contentType(ContentType.JSON)
-				.body(requestBody)
-				.when().put("/3");
-
-		assertEquals(200, response.getStatusCode());
-	}
-
-
-
-	@Test
 	void testDeleteDelete(){
 		RestAssured.baseURI = port + "/" + epr;
 
 		Response response = given()
 				.when()
-				.delete("/3");
+				.delete("/1");
 
 		assertEquals(200, response.getStatusCode());
 	}
@@ -109,24 +113,39 @@ class RealEstateEntityAgencyApplicationTests {
 	/*
 	agency-service
 	*/
-	/*
+	@Test
+	void testPutCreateContract() throws IOException {
+		RestAssured.baseURI = port + "/" + epa;
+
+		String requestBody = new String(Files.readAllBytes(Paths.get("src/test/resources/AgencyRequestBody.txt")));
+
+		Response response = given()
+				.contentType(ContentType.JSON)
+				.body(requestBody)
+				.when().put("/");
+
+		assertEquals(201, response.getStatusCode());
+
+
+	}
+
 	@Test
 	void testGetFindByInternalId(){
 
-		RestAssured.baseURI = port + "/" + epa;
-
-		Response response = RestAssured.get("/3");
-
-		assertEquals(200, response.getStatusCode());
 	}
 
 	@Test
-	void testGetById(){
-		RestAssured.baseURI = port + "/" + epr;
+	void testGetFind(){
 
-		Response response = RestAssured.get("/3");
-
-		assertEquals(200, response.getStatusCode());
 	}
-	*/
+
+	@Test
+	void testPostApprove(){
+
+	}
+
+	@Test
+	void testPostDisapprove(){
+
+	}
 }

@@ -1,0 +1,7 @@
+{
+    "realEstateId":1,
+    "creationDate":"2023-08-31",
+    "approved":null,
+    "clientName":"Олег",
+    "employeeName":"Степан"
+}
