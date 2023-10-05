@@ -192,7 +192,7 @@ public class RealEstateStore {
 
             if(addressId == null) {
                 connection.rollback();
-                throw new RealEstateException("error updating real estate: address not found");
+                throw new RealEstateNotFoundException("error updating real estate: address not found");
             }
 
             PreparedStatement realEstateUpdateStatement = connection.prepareStatement(QUERY_UPDATE_REAL_ESTATE);
