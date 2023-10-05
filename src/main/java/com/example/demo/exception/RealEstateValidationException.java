@@ -12,8 +12,8 @@ public class RealEstateValidationException extends Exception {
         super();
     }
 
-    public RealEstateValidationException(String message, List<String> errorList) {
-        super(message);
+    public RealEstateValidationException(List<String> errorList) {
+        super();
         this.errorList = errorList;
     }
 }

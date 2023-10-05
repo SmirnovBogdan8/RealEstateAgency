@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import javax.validation.ConstraintViolation;
 import javax.validation.Validator;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -32,9 +33,18 @@ public class RealEstateServiceImpl implements RealEstateService {
 
     @Override
     public void update(RealEstate realEstateEntity) throws RealEstateException, RealEstateNotFoundException, RealEstateValidationException {
+        try {
+            validate(realEstateEntity);
+        } catch (RealEstateValidationException e) {
+            Long id = realEstateEntity.getId();
+            if (id == null) e.getErrorList().add("Validation error: real estate id is required");
+            throw e;
+        }
+
         Long id = realEstateEntity.getId();
-        if (id == null) throw new RealEstateException("real estate id is required");
-        validate(realEstateEntity);
+        if (id == null)
+            throw new RealEstateValidationException(Collections.singletonList("Validation error: real estate id is required"));
+
         realEstateStore.update(id, realEstateEntity);
     }
 
@@ -90,7 +100,7 @@ public class RealEstateServiceImpl implements RealEstateService {
             validationErrorList.add("Validation error: commission must be less or equals price");
         }
         if (validationErrorList.isEmpty()) return;
-        throw new RealEstateValidationException("", validationErrorList);
+        throw new RealEstateValidationException(validationErrorList);
     }
 
     private void validateAddress(Address address) throws RealEstateValidationException {
@@ -101,6 +111,6 @@ public class RealEstateServiceImpl implements RealEstateService {
                 .collect(Collectors.toList());
 
         if (validationErrorList.isEmpty()) return;
-        throw new RealEstateValidationException("", validationErrorList);
+        throw new RealEstateValidationException(validationErrorList);
     }
 }
