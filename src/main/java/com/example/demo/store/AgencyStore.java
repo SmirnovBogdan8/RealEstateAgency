@@ -1,6 +1,7 @@
 package com.example.demo.store;
 
 import com.example.demo.exception.ContractException;
+import com.example.demo.exception.ContractNotFoundException;
 import com.example.demo.model.Contract;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,7 +42,7 @@ public class AgencyStore {
     }
 
 
-    public Contract findByInternalId(UUID id) throws ContractException {
+    public Contract findByInternalId(UUID id) throws ContractNotFoundException {
         try (Connection connection = agencyDatasource.getConnection()) {
             PreparedStatement statement = connection.prepareStatement(QUERY_FIND_BY_INTERNAL_ID);
             statement.setObject(1, id);
@@ -51,11 +52,11 @@ public class AgencyStore {
             if (statement.execute()) {
                 resultSet = statement.getResultSet();
             } else {
-                throw new ContractException("contract with internal id " + id + " not found");
+                throw new ContractNotFoundException("contract with internal id " + id + " not found");
             }
             boolean next = resultSet.next();
             if (!next) {
-                throw new ContractException("contract with internal id " + id + " not found");
+                throw new ContractNotFoundException("contract with internal id " + id + " not found");
             }
             return buildFromQueryResult(resultSet);
         } catch (SQLException e) {

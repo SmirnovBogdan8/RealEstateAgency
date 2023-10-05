@@ -1,6 +1,8 @@
 package com.example.demo.controller;
 
 import com.example.demo.exception.ContractApproveException;
+import com.example.demo.exception.ContractNotFoundException;
+import com.example.demo.exception.ContractValidationException;
 import com.example.demo.model.Contract;
 import com.example.demo.model.ContractFindModel;
 import com.example.demo.model.RealEstateAgencyResponse;
@@ -29,6 +31,13 @@ public class AgencyController {
             return ResponseEntity.status(HttpStatus.CREATED)
                     .body(RealEstateAgencyResponse.builder()
                             .response(created).build());
+        } catch (ContractValidationException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(RealEstateAgencyResponse
+                            .builder()
+                            .response("Contract validation failed")
+                            .errors(e.getErrorList())
+                            .build());
         } catch (Exception e) {
             return ResponseEntity.internalServerError()
                     .body(RealEstateAgencyResponse.builder()
@@ -46,6 +55,12 @@ public class AgencyController {
             return ResponseEntity.status(HttpStatus.OK)
                     .body(RealEstateAgencyResponse.builder()
                             .response(contract).build());
+        } catch (ContractNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(RealEstateAgencyResponse.builder()
+                            .errors(List.of(e.getMessage()))
+                            .build()
+                    );
         } catch (Exception e) {
             return ResponseEntity.internalServerError()
                     .body(RealEstateAgencyResponse.builder()
@@ -63,6 +78,12 @@ public class AgencyController {
             return ResponseEntity.status(HttpStatus.OK)
                     .body(RealEstateAgencyResponse.builder()
                             .response(contracts).build());
+        } catch (ContractNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(RealEstateAgencyResponse.builder()
+                            .errors(List.of(e.getMessage()))
+                            .build()
+                    );
         } catch (Exception e) {
             return ResponseEntity.internalServerError()
                     .body(RealEstateAgencyResponse.builder()
@@ -80,6 +101,12 @@ public class AgencyController {
             return ResponseEntity.status(HttpStatus.OK)
                     .body(RealEstateAgencyResponse.builder()
                             .response("OK").build());
+        } catch (ContractNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(RealEstateAgencyResponse.builder()
+                            .errors(List.of(e.getMessage()))
+                            .build()
+                    );
         } catch (Exception e) {
             if (e instanceof ContractApproveException) {
                 return ResponseEntity.badRequest()
@@ -104,6 +131,12 @@ public class AgencyController {
             return ResponseEntity.status(HttpStatus.OK)
                     .body(RealEstateAgencyResponse.builder()
                             .response("OK").build());
+        } catch (ContractNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(RealEstateAgencyResponse.builder()
+                            .errors(List.of(e.getMessage()))
+                            .build()
+                    );
         } catch (Exception e) {
             if (e instanceof ContractApproveException) {
                 return ResponseEntity.badRequest()
