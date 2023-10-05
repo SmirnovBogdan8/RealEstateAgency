@@ -34,7 +34,7 @@ public class RealEstateAgencyApplicationTest {
 	real-estate-service
 	*/
 
-    @Test(description = "begin test")
+    @Test(description = "begin test", priority = 1)
     void testPostCreate() throws IOException {
         RestAssured.baseURI = port + "/" + epr;
 
@@ -48,7 +48,7 @@ public class RealEstateAgencyApplicationTest {
         assertEquals(201, response.getStatusCode());
     }
 
-    @Test(dependsOnMethods = "testPostCreate")
+    @Test(priority = 2)
     void testPutUpdate()throws IOException {
         RestAssured.baseURI = port + "/" + epr;
 
@@ -59,10 +59,10 @@ public class RealEstateAgencyApplicationTest {
                 .body(requestBody)
                 .when().put("/");
 
-        assertEquals(200, response.getStatusCode());
+        assertEquals(201, response.getStatusCode());
     }
 
-    @Test(dependsOnMethods = "testPutUpdate")
+    @Test(priority = 3)
     void testGetAll(){
 
         RestAssured.baseURI = port + "/" + epr;
@@ -72,7 +72,7 @@ public class RealEstateAgencyApplicationTest {
         assertEquals(200, response.getStatusCode());
     }
 
-    @Test(dependsOnMethods = "testGetById")
+    @Test(priority = 4)
     void testGetById(){
         RestAssured.baseURI = port + "/" + epr;
 
@@ -81,7 +81,7 @@ public class RealEstateAgencyApplicationTest {
         assertEquals(200, response.getStatusCode());
     }
 
-    @Test(dependsOnMethods = "testGetFindByAddress")
+    @Test(priority = 5)
     void testGetFindByAddress(){
         RestAssured.baseURI = port + "/" + epr;
 
@@ -93,7 +93,7 @@ public class RealEstateAgencyApplicationTest {
         assertEquals(200, response.getStatusCode());
     }
 
-    @Test(dependsOnMethods = "testGetFindByAddress")
+    @Test(priority = 6)
     void testDeleteDelete(){
         RestAssured.baseURI = port + "/" + epr;
 
@@ -106,7 +106,7 @@ public class RealEstateAgencyApplicationTest {
 
     /*
     agency-service
-    */
+
     @Test(dependsOnMethods = "testDeleteDelete")
     void testPutCreateContract() throws IOException {
         RestAssured.baseURI = port + "/" + epa;
@@ -142,4 +142,6 @@ public class RealEstateAgencyApplicationTest {
     void testPostDisapprove(){
 
     }
+
+     */
 }

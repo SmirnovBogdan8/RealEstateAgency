@@ -12,6 +12,7 @@ spring:
     show-sql: true
     hibernate:
       dialect: org.hibernate.dialect.PostgreSQLDialect
+      ddl-auto: create
   datasource:
     platform: postgres
     url: jdbc:postgresql://localhost:5432/real_estate_agency
