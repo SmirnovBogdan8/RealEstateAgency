@@ -5,7 +5,7 @@ import com.example.demo.exception.RealEstateNotFoundException;
 import com.example.demo.model.Address;
 import com.example.demo.model.RealEstate;
 import com.example.demo.model.RealEstateType;
-import lombok.extern.log4j.Log4j2;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -14,7 +14,7 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
-@Log4j2
+@Slf4j
 @Component
 public class RealEstateStore {
 
@@ -71,7 +71,7 @@ public class RealEstateStore {
             }
             return buildFromQueryResult(resultSet);
         } catch (SQLException e) {
-            log.error("getById error: {}", e.getMessage());
+            log.error("getById error:", e);
             return null;
         }
     }
@@ -126,7 +126,7 @@ public class RealEstateStore {
 
             return realEstateEntities;
         } catch (SQLException e) {
-            log.error("getByAddress error: {}", e.getMessage());
+            log.error("getByAddress error: ", e);
             return null;
         }
     }
@@ -170,7 +170,7 @@ public class RealEstateStore {
             connection.commit();
 
         } catch (SQLException e) {
-            log.error("create query: {}, error: {}", QUERY_INSERT_REAL_ESTATE + ";" + QUERY_INSERT_ADDRESS, e.getMessage());
+            log.error("create query: {}, error: ", QUERY_INSERT_REAL_ESTATE + ";" + QUERY_INSERT_ADDRESS, e);
             throw new RealEstateException("error creating real estate: " + e.getMessage(), e.getCause());
         }
     }
@@ -192,7 +192,7 @@ public class RealEstateStore {
 
             if(addressId == null) {
                 connection.rollback();
-                throw new RealEstateException("error updating real estate: address not found");
+                throw new RealEstateNotFoundException("error updating real estate: address not found");
             }
 
             PreparedStatement realEstateUpdateStatement = connection.prepareStatement(QUERY_UPDATE_REAL_ESTATE);
@@ -224,7 +224,7 @@ public class RealEstateStore {
             connection.commit();
 
         } catch (SQLException e) {
-            log.error("update query: {}, error: {}", QUERY_UPDATE_REAL_ESTATE, e.getMessage());
+            log.error("update query: {}, error: ", QUERY_UPDATE_REAL_ESTATE, e);
             throw new RealEstateException("error updating real estate: " + e.getMessage(), e.getCause());
         }
     }
@@ -262,7 +262,7 @@ public class RealEstateStore {
 
             connection.commit();
         } catch (SQLException e) {
-            log.error("delete query: {}, error: {}", QUERY_DELETE_REAL_ESTATE, e.getMessage());
+            log.error("delete query: {}, error: ", QUERY_DELETE_REAL_ESTATE, e);
             throw new RealEstateException("error delete real estate: " + e.getMessage(), e.getCause());
         }
     }

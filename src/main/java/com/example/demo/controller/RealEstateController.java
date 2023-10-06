@@ -1,6 +1,7 @@
 package com.example.demo.controller;
 
 import com.example.demo.exception.RealEstateNotFoundException;
+import com.example.demo.exception.RealEstateValidationException;
 import com.example.demo.model.Address;
 import com.example.demo.model.RealEstate;
 import com.example.demo.model.RealEstateAgencyResponse;
@@ -79,6 +80,13 @@ public class RealEstateController {
                     .body(RealEstateAgencyResponse.builder()
                             .response(realEstates)
                             .build());
+        } catch (RealEstateValidationException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(RealEstateAgencyResponse
+                            .builder()
+                            .response("Address validation failed")
+                            .errors(e.getErrorList())
+                            .build());
         } catch (RealEstateNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(RealEstateAgencyResponse
@@ -97,6 +105,13 @@ public class RealEstateController {
                     .status(HttpStatus.CREATED)
                     .body(RealEstateAgencyResponse.builder()
                             .response("OK")
+                            .build());
+        } catch (RealEstateValidationException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(RealEstateAgencyResponse
+                            .builder()
+                            .response("Real estate validation failed")
+                            .errors(e.getErrorList())
                             .build());
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -117,14 +132,14 @@ public class RealEstateController {
                     .body(RealEstateAgencyResponse.builder()
                             .response("OK")
                             .build());
+        } catch (RealEstateNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(RealEstateAgencyResponse
+                            .builder()
+                            .errors(List.of(e.getMessage()))
+                            .build());
         } catch (Exception e) {
-            if (e instanceof RealEstateNotFoundException) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(RealEstateAgencyResponse
-                                .builder()
-                                .errors(List.of(e.getMessage()))
-                                .build());
-            }
+
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(RealEstateAgencyResponse
                             .builder()
@@ -142,14 +157,20 @@ public class RealEstateController {
                     .body(RealEstateAgencyResponse.builder()
                             .response("OK")
                             .build());
+        } catch (RealEstateValidationException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(RealEstateAgencyResponse
+                            .builder()
+                            .response("Real estate validation failed")
+                            .errors(e.getErrorList())
+                            .build());
+        } catch (RealEstateNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(RealEstateAgencyResponse
+                            .builder()
+                            .errors(List.of(e.getMessage()))
+                            .build());
         } catch (Exception e) {
-            if (e instanceof RealEstateNotFoundException) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(RealEstateAgencyResponse
-                                .builder()
-                                .errors(List.of(e.getMessage()))
-                                .build());
-            }
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(RealEstateAgencyResponse
                             .builder()

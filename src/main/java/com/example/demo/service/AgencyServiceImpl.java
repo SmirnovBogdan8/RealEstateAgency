@@ -1,23 +1,24 @@
 package com.example.demo.service;
 
-import com.example.demo.exception.ContractApproveException;
-import com.example.demo.exception.ContractException;
-import com.example.demo.exception.RealEstateNotFoundException;
+import com.example.demo.exception.*;
 import com.example.demo.ftp.FtpClient;
 import com.example.demo.model.Contract;
 import com.example.demo.model.ContractFindModel;
-import com.example.demo.model.RealEstate;
 import com.example.demo.store.AgencyStore;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import javax.validation.ConstraintViolation;
+import javax.validation.Validator;
 import java.io.IOException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Log4j2
@@ -29,14 +30,16 @@ public class AgencyServiceImpl implements AgencyService {
     @Autowired
     RealEstateService realEstateService;
 
-    @Override
-    public Contract createContract(Contract contract) throws ContractException {
-        Long realEstateId = contract.getRealEstateId();
-        if (realEstateId == null) throw new ContractException("real estate id is required");
+    @Autowired
+    private Validator validator;
 
-        RealEstate realEstate;
+    @Override
+    public Contract createContract(Contract contract) throws ContractException, ContractValidationException {
+        validate(contract);
+        Long realEstateId = contract.getRealEstateId();
+
         try {
-            realEstate = realEstateService.getById(realEstateId);
+            realEstateService.getById(realEstateId);
         } catch (RealEstateNotFoundException e) {
             throw new ContractException("create contract error: real estate with id " + realEstateId + " not found");
         }
@@ -56,12 +59,12 @@ public class AgencyServiceImpl implements AgencyService {
     }
 
     @Override
-    public Contract findByInternalId(UUID id) throws ContractException {
+    public Contract findByInternalId(UUID id) throws ContractNotFoundException {
         return agencyStore.findByInternalId(id);
     }
 
     @Override
-    public void approve(UUID id) throws ContractException, ContractApproveException {
+    public void approve(UUID id) throws ContractException, ContractApproveException, ContractNotFoundException {
         Contract contract = findByInternalId(id);
         if (contract.getApproved() == null) {
             agencyStore.approve(id);
@@ -75,7 +78,7 @@ public class AgencyServiceImpl implements AgencyService {
     }
 
     @Override
-    public void disapprove(UUID id) throws ContractException, ContractApproveException {
+    public void disapprove(UUID id) throws ContractException, ContractApproveException, ContractNotFoundException {
         Contract contract = findByInternalId(id);
         if (contract.getApproved() == null) {
             agencyStore.disapprove(id);
@@ -89,7 +92,7 @@ public class AgencyServiceImpl implements AgencyService {
     }
 
     @Override
-    public List<Contract> find(ContractFindModel contractFindModel) {
+    public List<Contract> find(ContractFindModel contractFindModel) throws ContractNotFoundException {
         if (contractFindModel.getContract() == null) {
             return agencyStore.find(
                     contractFindModel.getDateFrom(),
@@ -105,7 +108,7 @@ public class AgencyServiceImpl implements AgencyService {
         String clientName = contractFindModel.getContract().getClientName();
         String employeeName = contractFindModel.getContract().getEmployeeName();
 
-        return agencyStore.find(
+        List<Contract> contractList = agencyStore.find(
                 contractFindModel.getDateFrom(),
                 contractFindModel.getDateTo(),
                 realEstateId,
@@ -113,10 +116,13 @@ public class AgencyServiceImpl implements AgencyService {
                 clientName,
                 employeeName
         );
+
+        if (contractList.isEmpty()) throw new ContractNotFoundException("No contracts were found");
+        return contractList;
     }
 
     @Scheduled(cron = ("${contracts.export.cron}"))
-    public void exportContracts() throws IOException {
+    public void exportContracts() throws IOException, ContractNotFoundException {
         ContractFindModel contractFindModel = ContractFindModel.builder()
                 .dateFrom(Timestamp.from(Instant.now().minusSeconds(1000000)))
                 .dateTo(Timestamp.from(Instant.now()))
@@ -125,7 +131,7 @@ public class AgencyServiceImpl implements AgencyService {
                 .build();
         List<Contract> found = find(contractFindModel);
 
-        if(found == null || found.isEmpty()) {
+        if (found == null || found.isEmpty()) {
             log.info("No contracts to export");
             return;
         }
@@ -144,14 +150,25 @@ public class AgencyServiceImpl implements AgencyService {
         boolean success = false;
         String filename = "contracts_" + Instant.now().toString() + ".csv";
         if (ftpClient.isConnected()) {
-            success = ftpClient.upload(str.toString(),filename );
+            success = ftpClient.upload(str.toString(), filename);
         }
         if (!success) {
             log.error("can not write to ftp server");
         } else {
-            log.info("successfully uploaded file {}",filename);
+            log.info("successfully uploaded file {}", filename);
         }
 
         ftpClient.close();
+    }
+
+    private void validate(Contract contract) throws ContractValidationException {
+        Set<ConstraintViolation<Contract>> constraintViolations = validator.validate(contract);
+
+        List<String> validationErrorList = constraintViolations.stream()
+                .map(constraintViolation -> "Validation error: " + constraintViolation.getPropertyPath() + ": " + constraintViolation.getMessage())
+                .collect(Collectors.toList());
+
+        if (validationErrorList.isEmpty()) return;
+        throw new ContractValidationException(validationErrorList);
     }
 }

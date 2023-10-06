@@ -3,6 +3,7 @@ package com.example.demo.model;
 import lombok.Builder;
 import lombok.Data;
 
+import javax.validation.constraints.NotNull;
 import java.sql.Timestamp;
 import java.util.UUID;
 
@@ -10,6 +11,7 @@ import java.util.UUID;
 @Builder
 public class Contract {
     private UUID internalId;
+    @NotNull
     private Long realEstateId;
     private Timestamp creationDate;
     private Boolean approved;
@@ -18,7 +20,7 @@ public class Contract {
 
     @Override
     public String toString() {
-        return  internalId +
+        return internalId +
                 "," + realEstateId +
                 "," + approved +
                 "," + clientName +

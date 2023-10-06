@@ -1,8 +1,9 @@
 package com.example.demo.store;
 
 import com.example.demo.exception.ContractException;
+import com.example.demo.exception.ContractNotFoundException;
 import com.example.demo.model.Contract;
-import lombok.extern.log4j.Log4j2;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -12,7 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-@Log4j2
+@Slf4j
 @Component
 public class AgencyStore {
 
@@ -35,13 +36,13 @@ public class AgencyStore {
             int result = statement.executeUpdate();
             if (result == 0) throw new ContractException("error creating contract ");
         } catch (SQLException e) {
-            log.error("create query: {}, error: {}", QUERY_CREATE, e.getMessage());
-            throw new ContractException("error creating contract: " + e.getMessage(), e.getCause());
+            log.error("create query: {}, error: {}", QUERY_CREATE, e);
+            throw new ContractException("error creating contract: " + e, e.getCause());
         }
     }
 
 
-    public Contract findByInternalId(UUID id) throws ContractException {
+    public Contract findByInternalId(UUID id) throws ContractNotFoundException {
         try (Connection connection = agencyDatasource.getConnection()) {
             PreparedStatement statement = connection.prepareStatement(QUERY_FIND_BY_INTERNAL_ID);
             statement.setObject(1, id);
@@ -51,15 +52,15 @@ public class AgencyStore {
             if (statement.execute()) {
                 resultSet = statement.getResultSet();
             } else {
-                throw new ContractException("contract with internal id " + id + " not found");
+                throw new ContractNotFoundException("contract with internal id " + id + " not found");
             }
             boolean next = resultSet.next();
             if (!next) {
-                throw new ContractException("contract with internal id " + id + " not found");
+                throw new ContractNotFoundException("contract with internal id " + id + " not found");
             }
             return buildFromQueryResult(resultSet);
         } catch (SQLException e) {
-            log.error("findByInternalId error: {}", e.getMessage());
+            log.error("findByInternalId error: ", e);
             return null;
         }
     }
@@ -73,7 +74,7 @@ public class AgencyStore {
 
             if (result == 0) throw new ContractException("can not approve contract with id " + id);
         } catch (SQLException e) {
-            log.error("approve error: {}", e.getMessage());
+            log.error("approve error:", e);
         }
     }
 
@@ -86,7 +87,7 @@ public class AgencyStore {
 
             if (result == 0) throw new ContractException("can not disapprove contract with id " + id);
         } catch (SQLException e) {
-            log.error("disapprove error: {}", e.getMessage());
+            log.error("disapprove error: ", e);
         }
     }
 
@@ -138,7 +139,7 @@ public class AgencyStore {
 
             return contractList;
         } catch (SQLException e) {
-            log.error("find error: {}", e.getMessage());
+            log.error("find error: ", e);
             return null;
         }
     }

@@ -5,9 +5,11 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
-import org.springframework.scheduling.annotation.EnableScheduling;
 
 import javax.sql.DataSource;
+import javax.validation.Validation;
+import javax.validation.Validator;
+import javax.validation.ValidatorFactory;
 
 @SpringBootApplication
 //@EnableScheduling
@@ -16,7 +18,6 @@ public class RealEstateAgencyApplication {
     public static void main(String[] args) {
         SpringApplication.run(RealEstateAgencyApplication.class, args);
     }
-
 
 
     @ConfigurationProperties(prefix = "real-estate-datasource")
@@ -36,6 +37,12 @@ public class RealEstateAgencyApplication {
         return DataSourceBuilder
                 .create()
                 .build();
+    }
+
+    @Bean
+    public Validator validator() {
+        ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
+        return factory.getValidator();
     }
 }
 
